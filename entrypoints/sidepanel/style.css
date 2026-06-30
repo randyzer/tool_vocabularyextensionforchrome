@@ -1,0 +1,13 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+#app {
+  padding: 16px;
+}
