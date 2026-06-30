@@ -1,6 +1,7 @@
 import type {
   DictionaryEntry,
   SaveCaptureResult,
+  Settings,
 } from '../shared/models';
 import { HoverController } from './hover-controller';
 import { targetAtPoint } from './target-at-point';
@@ -16,6 +17,10 @@ type LookupResponse =
 
 type SaveResponse =
   | { ok: true; data: SaveCaptureResult }
+  | { ok: false; error: string };
+
+type SettingsResponse =
+  | { ok: true; data: Settings }
   | { ok: false; error: string };
 
 export function startContentRuntime(): () => void {
@@ -36,6 +41,17 @@ export function startContentRuntime(): () => void {
       }
 
       if (response.data.lookupStatus === 'found') {
+        const settingsResponse = await browser.runtime.sendMessage({
+          type: 'GET_SETTINGS',
+        }) as SettingsResponse;
+
+        if (settingsResponse.ok && settingsResponse.data.autoSpeak) {
+          void browser.runtime.sendMessage({
+            type: 'SPEAK_WORD',
+            word: target.word,
+          });
+        }
+
         tooltip.show(response.data.entry, lastRect);
       } else {
         tooltip.showError('离线词典未收录');
