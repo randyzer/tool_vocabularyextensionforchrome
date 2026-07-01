@@ -1,5 +1,6 @@
 import type { Capture } from '../../shared/models';
 import { send } from '../api';
+import { canTranslate, translateSentence } from '../translator';
 
 export function createHighlightedSentence(
   sentence: string,
@@ -73,6 +74,31 @@ export function createCaptureCard(
   });
 
   controls.append(speak, mastered, remove);
+
+  if (canTranslate()) {
+    const translate = document.createElement('button');
+    translate.type = 'button';
+    translate.textContent = '翻译整句';
+    translate.addEventListener('click', async () => {
+      translate.disabled = true;
+
+      try {
+        const translated = document.createElement('p');
+        translated.className = 'capture-translation';
+        translated.textContent = await translateSentence(capture.sentence);
+        article.append(translated);
+      } catch {
+        const error = document.createElement('p');
+        error.className = 'capture-translation';
+        error.textContent = '当前 Chrome 无法下载或使用离线翻译模型。';
+        article.append(error);
+      } finally {
+        translate.disabled = false;
+      }
+    });
+    controls.append(translate);
+  }
+
   article.append(heading, definitions, sentence, controls);
 
   return article;
