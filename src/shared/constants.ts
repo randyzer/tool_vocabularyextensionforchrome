@@ -1,5 +1,5 @@
 export const HOVER_DELAY_MS = 500;
-export const AUTO_SAVE_DELAY_MS = 1_000;
+export const AUTO_SAVE_DELAY_MS = 2_000;
 export const UNDO_WINDOW_MS = 5_000;
 export const TOOLTIP_CLOSE_DELAY_MS = 200;
 export const CONTENT_SCRIPT_ID = 'context-vocabulary-hover';

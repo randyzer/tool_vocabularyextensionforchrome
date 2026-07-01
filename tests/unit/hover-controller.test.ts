@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe('HoverController', () => {
-  it('looks up after 500ms and auto-saves after another 1000ms', async () => {
+  it('looks up after 500ms and auto-saves after another 2000ms', async () => {
     vi.useFakeTimers();
     const lookup = vi.fn().mockResolvedValue({ lookupStatus: 'found' });
     const save = vi.fn().mockResolvedValue(undefined);
@@ -38,7 +38,7 @@ describe('HoverController', () => {
     expect(lookup).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(lookup).toHaveBeenCalledOnce();
-    await vi.advanceTimersByTimeAsync(999);
+    await vi.advanceTimersByTimeAsync(1_999);
     expect(save).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(save).toHaveBeenCalledOnce();
