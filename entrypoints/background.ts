@@ -9,6 +9,9 @@ import {
   openDigestPanel,
 } from '../src/background/panel-navigation';
 import {
+  createMessageListener,
+} from '../src/background/message-listener';
+import {
   ensureContentRegistration,
 } from '../src/background/content-registration';
 import { handleMessage } from '../src/background/message-handler';
@@ -16,7 +19,7 @@ import { WEEKLY_ALARM_NAME } from '../src/shared/constants';
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener(
-    (message) => handleMessage(message),
+    createMessageListener(handleMessage),
   );
 
   const syncContentRegistration = (): void => {
