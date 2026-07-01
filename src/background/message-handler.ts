@@ -19,6 +19,11 @@ import {
   getSettings,
   saveSettings,
 } from '../storage/settings-repository';
+import {
+  clearAllData,
+  exportData,
+  importData,
+} from '../storage/portability-service';
 import { ensureWeeklyAlarm } from './alarm-service';
 import { ensureContentRegistration } from './content-registration';
 import { speakWord } from './speech-service';
@@ -35,6 +40,9 @@ export interface RouterDependencies {
   getDigest: typeof getDigest;
   getSettings: typeof getSettings;
   saveSettings: typeof saveSettings;
+  exportData: typeof exportData;
+  importData: typeof importData;
+  clearAllData: typeof clearAllData;
   ensureWeeklyAlarm: typeof ensureWeeklyAlarm;
   syncContentRegistration: typeof ensureContentRegistration;
 }
@@ -136,6 +144,17 @@ export function createMessageHandler(dependencies: RouterDependencies) {
         case 'SYNC_CONTENT_REGISTRATION':
           await dependencies.syncContentRegistration();
           return { ok: true };
+        case 'EXPORT_DATA':
+          return {
+            ok: true,
+            data: await dependencies.exportData(),
+          };
+        case 'IMPORT_DATA':
+          await dependencies.importData(request.payload);
+          return { ok: true };
+        case 'CLEAR_ALL_DATA':
+          await dependencies.clearAllData();
+          return { ok: true };
         default:
           return { ok: false, error: 'NOT_IMPLEMENTED' };
       }
@@ -162,6 +181,9 @@ export const handleMessage = createMessageHandler({
   getDigest,
   getSettings,
   saveSettings,
+  exportData,
+  importData,
+  clearAllData,
   ensureWeeklyAlarm,
   syncContentRegistration: ensureContentRegistration,
 });

@@ -28,6 +28,9 @@ function createDependencies(): RouterDependencies {
     getDigest: vi.fn(),
     getSettings: vi.fn().mockResolvedValue(settings),
     saveSettings: vi.fn(),
+    exportData: vi.fn(),
+    importData: vi.fn(),
+    clearAllData: vi.fn(),
     ensureWeeklyAlarm: vi.fn(),
     syncContentRegistration: vi.fn(),
   };

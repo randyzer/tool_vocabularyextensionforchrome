@@ -107,6 +107,52 @@ export async function renderSettings(
     refresh();
   });
 
+  const exportButton = document.createElement('button');
+  exportButton.type = 'button';
+  exportButton.textContent = '导出 JSON';
+  exportButton.addEventListener('click', async () => {
+    const payload = await send({
+      type: 'EXPORT_DATA',
+    });
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json',
+    }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `context-vocabulary-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+
+  const importInput = document.createElement('input');
+  importInput.type = 'file';
+  importInput.accept = 'application/json';
+  importInput.addEventListener('change', async () => {
+    const file = importInput.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    await send({
+      type: 'IMPORT_DATA',
+      payload: JSON.parse(await file.text()),
+    });
+    refresh();
+  });
+
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.textContent = '删除全部本地数据';
+  clearButton.addEventListener('click', async () => {
+    if (!confirm('删除后无法恢复，确定继续？')) {
+      return;
+    }
+
+    await send({ type: 'CLEAR_ALL_DATA' });
+    refresh();
+  });
+
   form.append(
     createToggle(settings, '启用取词', 'enabled', refresh),
     createToggle(settings, '自动发音', 'autoSpeak', refresh),
@@ -115,6 +161,9 @@ export async function renderSettings(
     disabledSites,
     disableSite,
     permission,
+    exportButton,
+    importInput,
+    clearButton,
   );
   section.append(form);
   container.append(section);
