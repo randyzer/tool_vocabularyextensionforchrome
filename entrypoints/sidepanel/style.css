@@ -95,6 +95,18 @@ button:disabled {
   gap: 12px;
 }
 
+.digest-tab {
+  width: auto;
+  justify-self: start;
+  background: #dce8df;
+  color: #274334;
+}
+
+.digest-tab[aria-current] {
+  background: #246b49;
+  color: #fff;
+}
+
 .settings-panel {
   padding: 14px;
   border: 1px solid #deddd4;

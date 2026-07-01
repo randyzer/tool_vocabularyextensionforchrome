@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "test:e2e": "pnpm build && playwright test",
     "dict:build": "node scripts/build-dictionary.mjs",
+    "icons:build": "node scripts/generate-icons.mjs",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "csv-parse": "latest",
     "fake-indexeddb": "latest",
     "happy-dom": "latest",
+    "sharp": "latest",
     "typescript": "latest",
     "vitest": "latest",
     "wxt": "latest"

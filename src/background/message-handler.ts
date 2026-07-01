@@ -19,6 +19,7 @@ import {
   getSettings,
   saveSettings,
 } from '../storage/settings-repository';
+import { ensureWeeklyAlarm } from './alarm-service';
 import { ensureContentRegistration } from './content-registration';
 import { speakWord } from './speech-service';
 
@@ -34,6 +35,7 @@ export interface RouterDependencies {
   getDigest: typeof getDigest;
   getSettings: typeof getSettings;
   saveSettings: typeof saveSettings;
+  ensureWeeklyAlarm: typeof ensureWeeklyAlarm;
   syncContentRegistration: typeof ensureContentRegistration;
 }
 
@@ -123,10 +125,14 @@ export function createMessageHandler(dependencies: RouterDependencies) {
             data: await dependencies.getSettings(),
           };
         case 'SAVE_SETTINGS':
+        {
+          const settings = await dependencies.saveSettings(request.patch);
+          await dependencies.ensureWeeklyAlarm();
           return {
             ok: true,
-            data: await dependencies.saveSettings(request.patch),
+            data: settings,
           };
+        }
         case 'SYNC_CONTENT_REGISTRATION':
           await dependencies.syncContentRegistration();
           return { ok: true };
@@ -156,5 +162,6 @@ export const handleMessage = createMessageHandler({
   getDigest,
   getSettings,
   saveSettings,
+  ensureWeeklyAlarm,
   syncContentRegistration: ensureContentRegistration,
 });

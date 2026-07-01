@@ -28,6 +28,7 @@ function createDependencies(): RouterDependencies {
     getDigest: vi.fn(),
     getSettings: vi.fn().mockResolvedValue(settings),
     saveSettings: vi.fn(),
+    ensureWeeklyAlarm: vi.fn(),
     syncContentRegistration: vi.fn(),
   };
 }
@@ -141,6 +142,26 @@ describe('message handler', () => {
       word: 'ultimately',
     })).resolves.toEqual({ ok: true });
     expect(dependencies.speak).toHaveBeenCalledWith('ultimately', 1.25);
+  });
+
+  it('reschedules the weekly alarm after saving settings', async () => {
+    const dependencies = createDependencies();
+    vi.mocked(dependencies.saveSettings).mockResolvedValue({
+      ...settings,
+      notificationHour: 10,
+    });
+
+    await expect(createMessageHandler(dependencies)({
+      type: 'SAVE_SETTINGS',
+      patch: { notificationHour: 10 },
+    })).resolves.toEqual({
+      ok: true,
+      data: {
+        ...settings,
+        notificationHour: 10,
+      },
+    });
+    expect(dependencies.ensureWeeklyAlarm).toHaveBeenCalledOnce();
   });
 
   it('returns explicit dependency errors', async () => {

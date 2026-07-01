@@ -1,11 +1,15 @@
-import { OPTIONAL_ORIGINS } from '../shared/constants';
+import {
+  OPTIONAL_ORIGINS,
+  PENDING_DIGEST_KEY,
+} from '../shared/constants';
 import type { Settings } from '../shared/models';
 import { send } from './api';
+import { renderDigests } from './views/digests';
 import { renderSettings } from './views/settings';
 import { renderCurrent } from './views/current';
 import { renderVocabulary } from './views/vocabulary';
 
-type Route = 'current' | 'vocabulary' | 'settings';
+type Route = 'current' | 'vocabulary' | 'digests' | 'settings';
 
 function appendTextElement(
   tagName: 'h1' | 'p',
@@ -17,9 +21,10 @@ function appendTextElement(
 }
 
 export async function startSidePanel(root: HTMLElement): Promise<void> {
-  const [settings, permitted] = await Promise.all([
+  const [settings, permitted, pending] = await Promise.all([
     send<Settings>({ type: 'GET_SETTINGS' }),
     browser.permissions.contains({ origins: OPTIONAL_ORIGINS }),
+    browser.storage.session.get(PENDING_DIGEST_KEY),
   ]);
 
   if (!permitted) {
@@ -70,7 +75,7 @@ export async function startSidePanel(root: HTMLElement): Promise<void> {
     return;
   }
 
-  let route: Route = 'current';
+  let route: Route = pending[PENDING_DIGEST_KEY] ? 'digests' : 'current';
   const shell = document.createElement('div');
   shell.className = 'panel-shell';
 
@@ -103,12 +108,18 @@ export async function startSidePanel(root: HTMLElement): Promise<void> {
       return;
     }
 
+    if (route === 'digests') {
+      await renderDigests(content, () => void render());
+      return;
+    }
+
     await renderSettings(content, () => void render());
   };
 
   for (const [value, label] of [
     ['current', '本期'],
     ['vocabulary', '生词库'],
+    ['digests', '周报'],
     ['settings', '设置'],
   ] as const) {
     const button = document.createElement('button');

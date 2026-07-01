@@ -2,7 +2,7 @@ import type { WeeklyDigest } from '../shared/models';
 import { getDatabase } from './database';
 
 export async function putDigest(digest: WeeklyDigest): Promise<void> {
-  await (await getDatabase()).add('digests', digest);
+  await (await getDatabase()).put('digests', digest);
 }
 
 export async function getDigest(
