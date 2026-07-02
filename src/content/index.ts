@@ -4,7 +4,10 @@ import type {
   Settings,
 } from '../shared/models';
 import { HoverController } from './hover-controller';
-import { PageSaveGuard } from './page-save-guard';
+import {
+  PageSaveGuard,
+  type GuardedSaveResult,
+} from './page-save-guard';
 import { targetAtPoint } from './target-at-point';
 import { createTooltip } from './tooltip';
 
@@ -79,24 +82,29 @@ export async function startContentRuntime(): Promise<() => void> {
     },
 
     async save(target) {
-      const result = await saveGuard.save(target, async () => {
-        const response = await browser.runtime.sendMessage({
-          type: 'SAVE_CAPTURE',
-          payload: {
-            ...target,
-            surfaceWord: target.word,
-            sourceTitle: document.title,
-            sourceUrl: window.location.href,
-          },
-        }) as SaveResponse;
+      let result: GuardedSaveResult<SaveCaptureResult>;
+      try {
+        result = await saveGuard.save(target, async () => {
+          const response = await browser.runtime.sendMessage({
+            type: 'SAVE_CAPTURE',
+            payload: {
+              ...target,
+              surfaceWord: target.word,
+              sourceTitle: document.title,
+              sourceUrl: window.location.href,
+            },
+          }) as SaveResponse;
 
-        if (!response.ok) {
-          tooltip.showError('保存失败，可重试');
-          throw new Error(response.error);
-        }
+          if (!response.ok) {
+            throw new Error(response.error);
+          }
 
-        return response.data;
-      });
+          return response.data;
+        });
+      } catch {
+        tooltip.showError('保存失败，可重试');
+        return;
+      }
 
       if (result.status === 'skipped') {
         return;
@@ -111,10 +119,11 @@ export async function startContentRuntime(): Promise<() => void> {
           }) as UndoResponse;
 
           if (!response.ok) {
-            tooltip.showError('撤销失败');
             throw new Error(response.error);
           }
-        }).catch(() => undefined);
+        }).catch(() => {
+          tooltip.showError('撤销失败');
+        });
       });
 
       return result.value;

@@ -84,7 +84,7 @@ test('hovering a word saves a highlighted source sentence', async ({
   await expect(
     page.locator('[data-context-vocabulary-ui]'),
   ).toHaveAttribute('data-state', 'visible');
-  await page.waitForTimeout(2_100);
+  await page.waitForTimeout(2_500);
 
   let captures = await listCaptures(extensionPage);
   expect(captures).toHaveLength(1);
