@@ -8,6 +8,7 @@ import {
   parseBlocklist,
   parseCustomWords,
   parseEcdict,
+  renderDictionaryReport,
   validateDictionaryArtifacts,
   type DictionaryBuildEntry,
   type DictionarySourceMetadata,
@@ -146,5 +147,16 @@ describe('dictionary pipeline', () => {
       removed: ['old'],
       changed: ['same'],
     });
+  });
+
+  it('renders a reviewable dictionary diff summary', () => {
+    expect(renderDictionaryReport({
+      sourceMetadata,
+      previousEntryCount: 100,
+      nextEntryCount: 104,
+      added: ['new-one', 'new-two'],
+      removed: ['old-one'],
+      changed: ['a', 'b', 'c'],
+    })).toContain('Added: 2 · Removed: 1 · Changed: 3');
   });
 });

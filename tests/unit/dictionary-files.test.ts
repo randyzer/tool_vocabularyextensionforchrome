@@ -13,7 +13,10 @@ import {
   buildDictionaryArtifacts,
   type DictionaryArtifacts,
 } from '../../scripts/dictionary/pipeline';
-import { publishDictionaryArtifacts } from '../../scripts/dictionary/files';
+import {
+  loadDictionaryInputs,
+  publishDictionaryArtifacts,
+} from '../../scripts/dictionary/files';
 
 let temporaryRoot: string;
 let outputDirectory: string;
@@ -54,6 +57,35 @@ afterEach(async () => {
 });
 
 describe('dictionary file publication', () => {
+  it('rejects source data that does not match its recorded SHA-256', async () => {
+    const sourceCsv = join(temporaryRoot, 'ecdict.csv');
+    const sourceMetadata = join(temporaryRoot, 'ecdict-source.json');
+    const customWords = join(temporaryRoot, 'custom-words.csv');
+    const blocklist = join(temporaryRoot, 'blocklist.txt');
+    await Promise.all([
+      writeFile(sourceCsv, 'tampered'),
+      writeFile(sourceMetadata, JSON.stringify({
+        source: 'ECDICT',
+        commit: '0123456789abcdef',
+        committedAt: '2026-07-01T00:00:00Z',
+        url: 'https://example.test/ecdict.csv',
+        sha256: 'a'.repeat(64),
+      })),
+      writeFile(
+        customWords,
+        'word,phonetic,part_of_speech,definitions_zh,source,note\n',
+      ),
+      writeFile(blocklist, ''),
+    ]);
+
+    await expect(loadDictionaryInputs({
+      ecdictCsv: sourceCsv,
+      sourceMetadata,
+      customWords,
+      blocklist,
+    })).rejects.toThrow('DICTIONARY_SOURCE_SHA256_MISMATCH');
+  });
+
   it('replaces the output only after every artifact validates', async () => {
     await writeFile(join(outputDirectory, 'sentinel.txt'), 'old');
 

@@ -9,7 +9,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   validateDictionaryArtifacts,
   type DictionaryArtifacts,
@@ -33,6 +33,7 @@ function parseSourceMetadata(value: string): DictionarySourceMetadata {
     || typeof parsed.committedAt !== 'string'
     || typeof parsed.url !== 'string'
     || typeof parsed.sha256 !== 'string'
+    || !/^[a-f0-9]{64}$/i.test(parsed.sha256)
   ) {
     throw new Error('DICTIONARY_INVALID_SOURCE_METADATA');
   }
@@ -50,18 +51,26 @@ export async function loadDictionaryInputs(paths: {
   customWordsCsv: string;
   blocklistText: string;
 }> {
-  const [ecdictCsv, metadataJson, customWordsCsv, blocklistText] = (
+  const [ecdictBytes, metadataJson, customWordsCsv, blocklistText] = (
     await Promise.all([
-      readFile(paths.ecdictCsv, 'utf8'),
+      readFile(paths.ecdictCsv),
       readFile(paths.sourceMetadata, 'utf8'),
       readFile(paths.customWords, 'utf8'),
       readFile(paths.blocklist, 'utf8'),
     ])
   );
 
+  const sourceMetadata = parseSourceMetadata(metadataJson);
+  const actualSha256 = createHash('sha256').update(ecdictBytes).digest('hex');
+  if (actualSha256 !== sourceMetadata.sha256.toLocaleLowerCase('en')) {
+    throw new Error(
+      `DICTIONARY_SOURCE_SHA256_MISMATCH:expected=${sourceMetadata.sha256}:actual=${actualSha256}`,
+    );
+  }
+
   return {
-    ecdictCsv,
-    sourceMetadata: parseSourceMetadata(metadataJson),
+    ecdictCsv: ecdictBytes.toString('utf8'),
+    sourceMetadata,
     customWordsCsv,
     blocklistText,
   };

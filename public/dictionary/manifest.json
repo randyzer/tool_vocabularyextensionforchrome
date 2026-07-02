@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "source": "ECDICT",
+  "ecdictCommit": "bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b",
+  "ecdictCommittedAt": "2025-03-28T09:02:57+08:00",
+  "ecdictUrl": "https://raw.githubusercontent.com/skywind3000/ECDICT/bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b/ecdict.csv",
+  "ecdictSha256": "1a6947e04785db63613a92e14903cdae7954f7e84860b10e68e5c7cbb3f9c3cf",
+  "upstreamEntryCount": 57833,
+  "customEntryCount": 0,
+  "blocklistCount": 0,
+  "entryCount": 57833
+}

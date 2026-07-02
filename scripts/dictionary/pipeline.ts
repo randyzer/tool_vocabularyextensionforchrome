@@ -75,6 +75,15 @@ export interface DictionaryArtifactOptions {
   blockedWords: string[];
 }
 
+export interface DictionaryUpdateReport {
+  sourceMetadata: DictionarySourceMetadata;
+  previousEntryCount: number;
+  nextEntryCount: number;
+  added: string[];
+  removed: string[];
+  changed: string[];
+}
+
 export function normalizeDictionaryWord(value: string): string {
   return value
     .trim()
@@ -321,6 +330,40 @@ export function compareDictionaryIndexes(
     removed: removed.sort(compareWords),
     changed: changed.sort(compareWords),
   };
+}
+
+function renderWordList(title: string, words: string[]): string {
+  const limit = 100;
+  const visible = words.slice(0, limit);
+  const lines = visible.length > 0
+    ? visible.map((word) => `- \`${word}\``)
+    : ['- None'];
+  if (words.length > limit) {
+    lines.push(`- …and ${words.length - limit} more`);
+  }
+  return [`## ${title}`, '', ...lines].join('\n');
+}
+
+export function renderDictionaryReport(
+  report: DictionaryUpdateReport,
+): string {
+  return [
+    '# Offline dictionary update',
+    '',
+    `ECDICT commit: \`${report.sourceMetadata.commit}\``,
+    `ECDICT committed at: ${report.sourceMetadata.committedAt}`,
+    `ECDICT SHA-256: \`${report.sourceMetadata.sha256}\``,
+    '',
+    `Entries: ${report.previousEntryCount} → ${report.nextEntryCount}`,
+    `Added: ${report.added.length} · Removed: ${report.removed.length} · Changed: ${report.changed.length}`,
+    '',
+    renderWordList('Added words', report.added),
+    '',
+    renderWordList('Removed words', report.removed),
+    '',
+    renderWordList('Changed words', report.changed),
+    '',
+  ].join('\n');
 }
 
 export function validateDictionaryArtifacts(

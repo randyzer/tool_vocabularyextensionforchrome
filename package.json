@@ -14,6 +14,7 @@
     "test:e2e": "pnpm build:e2e && playwright test",
     "dict:build": "tsx scripts/dictionary/build.ts",
     "dict:check": "tsx scripts/dictionary/check.ts",
+    "dict:update": "tsx scripts/dictionary/update.ts",
     "icons:build": "node scripts/generate-icons.mjs",
     "postinstall": "wxt prepare"
   },
