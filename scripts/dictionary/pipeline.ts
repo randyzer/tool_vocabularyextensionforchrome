@@ -21,6 +21,11 @@ export interface DictionaryBuildEntry {
   source: 'ecdict' | 'custom';
 }
 
+export interface ParsedCustomWords {
+  entries: Map<string, DictionaryBuildEntry>;
+  notes: Map<string, { source: string; note?: string }>;
+}
+
 export function normalizeDictionaryWord(value: string): string {
   return value
     .trim()
@@ -86,4 +91,90 @@ export function parseEcdict(csv: string): Map<string, DictionaryBuildEntry> {
   }
 
   return entries;
+}
+
+export function parseCustomWords(csv: string): ParsedCustomWords {
+  const rows = parse(csv, {
+    columns: true,
+    bom: true,
+    skip_empty_lines: true,
+    info: true,
+  }) as Array<{
+    record: Record<string, string>;
+    info: { lines: number };
+  }>;
+  const entries = new Map<string, DictionaryBuildEntry>();
+  const notes = new Map<string, { source: string; note?: string }>();
+
+  for (const { record, info } of rows) {
+    const lemma = normalizeDictionaryWord(record.word ?? '');
+    if (!WORD_PATTERN.test(lemma)) {
+      throw new Error(`CUSTOM_INVALID_WORD:${lemma}:row=${info.lines}`);
+    }
+    if (entries.has(lemma)) {
+      throw new Error(`CUSTOM_DUPLICATE_WORD:${lemma}:row=${info.lines}`);
+    }
+
+    const definitionsZh = uniqueNonEmpty(
+      String(record.definitions_zh ?? '').split('|'),
+    ).slice(0, 6);
+    const source = String(record.source ?? '').trim();
+    if (definitionsZh.length === 0 || source.length === 0) {
+      throw new Error(`CUSTOM_REQUIRED_FIELD:${lemma}:row=${info.lines}`);
+    }
+
+    entries.set(lemma, {
+      lemma,
+      phonetic: String(record.phonetic ?? '').trim() || undefined,
+      partOfSpeech: uniqueNonEmpty(
+        String(record.part_of_speech ?? '').split('|'),
+      ),
+      definitionsZh,
+      source: 'custom',
+    });
+    notes.set(lemma, {
+      source,
+      note: String(record.note ?? '').trim() || undefined,
+    });
+  }
+
+  return { entries, notes };
+}
+
+export function parseBlocklist(text: string): Set<string> {
+  const words = new Set<string>();
+
+  text.split(/\r?\n/).forEach((raw, index) => {
+    const value = raw.trim();
+    if (!value || value.startsWith('#')) {
+      return;
+    }
+
+    const word = normalizeDictionaryWord(value);
+    if (!WORD_PATTERN.test(word)) {
+      throw new Error(`BLOCKLIST_INVALID_WORD:${word}:row=${index + 1}`);
+    }
+    words.add(word);
+  });
+
+  return words;
+}
+
+export function mergeDictionaryEntries(
+  upstream: Map<string, DictionaryBuildEntry>,
+  custom: ParsedCustomWords,
+  blocklist: Set<string>,
+): Map<string, DictionaryBuildEntry> {
+  const merged = new Map(upstream);
+
+  for (const [word, entry] of custom.entries) {
+    merged.set(word, entry);
+  }
+  for (const word of blocklist) {
+    merged.delete(word);
+  }
+
+  return new Map([...merged.entries()].sort(([left], [right]) => (
+    left.localeCompare(right, 'en')
+  )));
 }

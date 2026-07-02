@@ -1,0 +1,1 @@
+# One normalized English word per line. Blank lines and lines starting with # are ignored.
