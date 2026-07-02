@@ -29,7 +29,7 @@
 
 - `scripts/update-dictionary.mjs`
   - 获取 ECDICT 最新 commit。
-  - 从固定 commit URL 下载 `ecdict.mini.csv`。
+  - 从固定 commit URL 下载完整的 `ecdict.csv`。
   - 计算 SHA-256。
   - 保存忽略提交的原始 CSV 和来源元数据。
   - 调用构建与检查流程。

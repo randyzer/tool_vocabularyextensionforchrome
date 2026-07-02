@@ -461,7 +461,7 @@ const sourceMetadata = {
   source: 'ECDICT' as const,
   commit: '0123456789abcdef',
   committedAt: '2026-07-01T00:00:00Z',
-  url: 'https://raw.githubusercontent.com/skywind3000/ECDICT/0123456789abcdef/ecdict.mini.csv',
+  url: 'https://raw.githubusercontent.com/skywind3000/ECDICT/0123456789abcdef/ecdict.csv',
   sha256: 'a'.repeat(64),
 };
 
@@ -803,7 +803,7 @@ expect(parseGithubCommitResponse({
 })).toEqual({
   commit: '0123456789abcdef',
   committedAt: '2026-07-01T00:00:00Z',
-  url: 'https://raw.githubusercontent.com/skywind3000/ECDICT/0123456789abcdef/ecdict.mini.csv',
+  url: 'https://raw.githubusercontent.com/skywind3000/ECDICT/0123456789abcdef/ecdict.csv',
 });
 
 expect(renderDictionaryReport(reportFixture)).toContain(
@@ -854,7 +854,7 @@ https://api.github.com/repos/skywind3000/ECDICT/commits/master
 and then pin the raw download to:
 
 ```text
-https://raw.githubusercontent.com/skywind3000/ECDICT/<full-sha>/ecdict.mini.csv
+https://raw.githubusercontent.com/skywind3000/ECDICT/<full-sha>/ecdict.csv
 ```
 
 Send a descriptive `User-Agent`, reject non-2xx responses, calculate SHA-256 with `node:crypto`, and only write `data/source/ecdict.csv` plus `ecdict-source.json` after the complete download succeeds.

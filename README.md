@@ -150,6 +150,15 @@ pnpm test:e2e
 - `pnpm typecheck`：运行 TypeScript 严格类型检查。
 - `pnpm test:e2e`：构建测试扩展并运行 Playwright 浏览器流程。
 
+### 更新离线词典
+
+```bash
+pnpm dict:update
+```
+
+词典来源、人工补词、质量检查和自动更新 PR 的完整流程见
+[docs/dictionary-maintenance.md](./docs/dictionary-maintenance.md)。
+
 ### 生产构建
 
 ```bash
