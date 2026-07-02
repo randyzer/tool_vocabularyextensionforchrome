@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import type { Capture } from '../../src/shared/models';
+import { CONTENT_SCRIPT_ID } from '../../src/shared/constants';
 import { expect, test } from './fixtures';
 
 type CaptureListResponse =
@@ -38,21 +39,30 @@ test('hovering a word saves a highlighted source sentence', async ({
   const extensionPage = await context.newPage();
   await extensionPage.goto(`chrome-extension://${extensionId}/sidepanel.html`);
 
-  await worker.evaluate(async () => {
+  await worker.evaluate(async (scriptId) => {
     const chromeApi = (globalThis as typeof globalThis & {
       chrome: {
         scripting: {
-          registerContentScripts(scripts: unknown[]): Promise<void>;
+          getRegisteredContentScripts(): Promise<Array<{ id: string }>>;
+          unregisterContentScripts(filter: {
+            ids: string[];
+          }): Promise<void>;
         };
       };
     }).chrome;
-    await chromeApi.scripting.registerContentScripts([{
-      id: 'e2e-hover',
-      js: ['hover.js'],
-      matches: ['http://127.0.0.1/*'],
-      runAt: 'document_idle',
-    }]);
-  });
+    const registrations = await chromeApi.scripting
+      .getRegisteredContentScripts();
+
+    if (registrations.some((registration) => registration.id === scriptId)) {
+      await chromeApi.scripting.unregisterContentScripts({
+        ids: [scriptId],
+      });
+    }
+  }, CONTENT_SCRIPT_ID);
+
+  const page = await context.newPage();
+  await page.goto('http://127.0.0.1:4173/article.html');
+
   await extensionPage.evaluate(async () => {
     const chromeApi = (globalThis as typeof globalThis & {
       chrome: {
@@ -68,10 +78,11 @@ test('hovering a word saves a highlighted source sentence', async ({
         autoSpeak: false,
       },
     });
+    await chromeApi.runtime.sendMessage({
+      type: 'SYNC_CONTENT_REGISTRATION',
+    });
   });
 
-  const page = await context.newPage();
-  await page.goto('http://127.0.0.1:4173/article.html');
   await page.locator('#target-word').hover();
   await expect.poll(
     async () => (await listCaptures(extensionPage)).length,

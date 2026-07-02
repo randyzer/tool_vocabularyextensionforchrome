@@ -3,6 +3,10 @@ import {
   OPTIONAL_ORIGINS,
 } from '../shared/constants';
 
+const contentScriptOrigins = import.meta.env.MODE === 'test'
+  ? ['http://127.0.0.1/*']
+  : OPTIONAL_ORIGINS;
+
 interface ContentScriptRegistration {
   id: string;
   js: string[];
@@ -17,10 +21,14 @@ export interface ContentRegistrationDependencies {
   getRegistrations(): Promise<Array<{ id: string }>>;
   register(registration: ContentScriptRegistration): Promise<void>;
   unregister(ids: string[]): Promise<void>;
+  getMatchingTabs(): Promise<Array<{ id?: number }>>;
+  inject(tabId: number): Promise<void>;
 }
 
-export async function hasHostPermission(): Promise<boolean> {
-  return browser.permissions.contains({ origins: OPTIONAL_ORIGINS });
+export async function hasHostPermission(
+  origins: string[] = contentScriptOrigins,
+): Promise<boolean> {
+  return browser.permissions.contains({ origins });
 }
 
 export function registrationAction(
@@ -36,9 +44,11 @@ export function registrationAction(
   return 'none';
 }
 
-function browserDependencies(): ContentRegistrationDependencies {
+function browserDependencies(
+  origins: string[],
+): ContentRegistrationDependencies {
   return {
-    hasPermission: hasHostPermission,
+    hasPermission: () => hasHostPermission(origins),
     getRegistrations: () => (
       browser.scripting.getRegisteredContentScripts()
     ),
@@ -48,11 +58,21 @@ function browserDependencies(): ContentRegistrationDependencies {
     unregister: async (ids) => {
       await browser.scripting.unregisterContentScripts({ ids });
     },
+    getMatchingTabs: () => browser.tabs.query({ url: origins }),
+    inject: async (tabId) => {
+      await browser.scripting.executeScript({
+        target: { tabId, allFrames: true },
+        files: ['/hover.js'],
+      });
+    },
   };
 }
 
 export async function ensureContentRegistration(
-  dependencies: ContentRegistrationDependencies = browserDependencies(),
+  dependencies: ContentRegistrationDependencies = browserDependencies(
+    contentScriptOrigins,
+  ),
+  origins: string[] = contentScriptOrigins,
 ): Promise<void> {
   const [permitted, registrations] = await Promise.all([
     dependencies.hasPermission(),
@@ -67,7 +87,7 @@ export async function ensureContentRegistration(
     await dependencies.register({
       id: CONTENT_SCRIPT_ID,
       js: ['hover.js'],
-      matches: OPTIONAL_ORIGINS,
+      matches: origins,
       allFrames: true,
       runAt: 'document_idle',
       persistAcrossSessions: true,
@@ -75,4 +95,15 @@ export async function ensureContentRegistration(
   } else if (action === 'unregister') {
     await dependencies.unregister([CONTENT_SCRIPT_ID]);
   }
+
+  if (!permitted) {
+    return;
+  }
+
+  const tabs = await dependencies.getMatchingTabs();
+  await Promise.allSettled(
+    tabs.flatMap((tab) => (
+      tab.id === undefined ? [] : [dependencies.inject(tab.id)]
+    )),
+  );
 }
