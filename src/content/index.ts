@@ -4,6 +4,7 @@ import type {
   Settings,
 } from '../shared/models';
 import { HoverController } from './hover-controller';
+import { PageSaveGuard } from './page-save-guard';
 import { targetAtPoint } from './target-at-point';
 import { createTooltip } from './tooltip';
 
@@ -17,6 +18,10 @@ type LookupResponse =
 
 type SaveResponse =
   | { ok: true; data: SaveCaptureResult }
+  | { ok: false; error: string };
+
+type UndoResponse =
+  | { ok: true }
   | { ok: false; error: string };
 
 type SettingsResponse =
@@ -37,6 +42,7 @@ export async function startContentRuntime(): Promise<() => void> {
   }
 
   const tooltip = createTooltip();
+  const saveGuard = new PageSaveGuard();
   let lastKey = '';
   let lastRect = new DOMRect();
 
@@ -73,30 +79,45 @@ export async function startContentRuntime(): Promise<() => void> {
     },
 
     async save(target) {
-      const response = await browser.runtime.sendMessage({
-        type: 'SAVE_CAPTURE',
-        payload: {
-          ...target,
-          surfaceWord: target.word,
-          sourceTitle: document.title,
-          sourceUrl: window.location.href,
-        },
-      }) as SaveResponse;
+      const result = await saveGuard.save(target, async () => {
+        const response = await browser.runtime.sendMessage({
+          type: 'SAVE_CAPTURE',
+          payload: {
+            ...target,
+            surfaceWord: target.word,
+            sourceTitle: document.title,
+            sourceUrl: window.location.href,
+          },
+        }) as SaveResponse;
 
-      if (!response.ok) {
-        tooltip.showError('保存失败，可重试');
-        throw new Error(response.error);
+        if (!response.ok) {
+          tooltip.showError('保存失败，可重试');
+          throw new Error(response.error);
+        }
+
+        return response.data;
+      });
+
+      if (result.status === 'skipped') {
+        return;
       }
 
       tooltip.showSaved(() => {
-        void browser.runtime.sendMessage({
-          type: 'UNDO_CAPTURE',
-          captureId: response.data.capture.id,
-          savedAt: response.data.savedAt,
-        });
+        void saveGuard.undo(target, async () => {
+          const response = await browser.runtime.sendMessage({
+            type: 'UNDO_CAPTURE',
+            captureId: result.value.capture.id,
+            savedAt: result.value.savedAt,
+          }) as UndoResponse;
+
+          if (!response.ok) {
+            tooltip.showError('撤销失败');
+            throw new Error(response.error);
+          }
+        }).catch(() => undefined);
       });
 
-      return response.data;
+      return result.value;
     },
 
     close: () => tooltip.hide(),
