@@ -1,12 +1,16 @@
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  buildDictionaryArtifacts,
+  compareDictionaryIndexes,
   mergeDictionaryEntries,
   parseBlocklist,
   parseCustomWords,
   parseEcdict,
+  validateDictionaryArtifacts,
   type DictionaryBuildEntry,
+  type DictionarySourceMetadata,
 } from '../../scripts/dictionary/pipeline';
 
 const fixturePath = resolve(
@@ -21,12 +25,38 @@ const blocklistFixturePath = resolve(
   process.cwd(),
   'tests/fixtures/dictionary/blocklist.txt',
 );
+const ecdictFixture = readFileSync(fixturePath, 'utf8');
+const customFixture = readFileSync(customFixturePath, 'utf8');
+const blocklistFixture = readFileSync(blocklistFixturePath, 'utf8');
+const parsedEcdictFixture = parseEcdict(ecdictFixture);
+const parsedCustomFixture = parseCustomWords(customFixture);
+const parsedBlocklistFixture = parseBlocklist(blocklistFixture);
+const mergedFixture = mergeDictionaryEntries(
+  parsedEcdictFixture,
+  parsedCustomFixture,
+  parsedBlocklistFixture,
+);
+const sourceMetadata: DictionarySourceMetadata = {
+  source: 'ECDICT',
+  commit: '0123456789abcdef',
+  committedAt: '2026-07-01T00:00:00Z',
+  url: 'https://raw.githubusercontent.com/skywind3000/ECDICT/0123456789abcdef/ecdict.mini.csv',
+  sha256: 'a'.repeat(64),
+};
+const artifactOptions = {
+  sourceMetadata,
+  upstreamEntryCount: parsedEcdictFixture.size,
+  customEntryCount: parsedCustomFixture.entries.size,
+  blocklistCount: parsedBlocklistFixture.size,
+  overriddenWords: ['ability'],
+  blockedWords: ['running'],
+};
 
 describe('dictionary pipeline', () => {
-  it('parses eligible ECDICT rows into runtime entries', async () => {
-    const csv = await readFile(fixturePath, 'utf8');
-
-    expect(parseEcdict(csv)).toEqual<Map<string, DictionaryBuildEntry>>(
+  it('parses eligible ECDICT rows into runtime entries', () => {
+    expect(parseEcdict(ecdictFixture)).toEqual<
+      Map<string, DictionaryBuildEntry>
+    >(
       new Map([
         ['ability', {
           lemma: 'ability',
@@ -53,17 +83,11 @@ describe('dictionary pipeline', () => {
       .toThrow('ECDICT_MISSING_COLUMNS:phonetic,pos,oxford,tag,bnc,frq');
   });
 
-  it('lets custom words override ECDICT and applies the blocklist', async () => {
-    const [ecdictCsv, customCsv, blocklist] = await Promise.all([
-      readFile(fixturePath, 'utf8'),
-      readFile(customFixturePath, 'utf8'),
-      readFile(blocklistFixturePath, 'utf8'),
-    ]);
-
+  it('lets custom words override ECDICT and applies the blocklist', () => {
     const merged = mergeDictionaryEntries(
-      parseEcdict(ecdictCsv),
-      parseCustomWords(customCsv),
-      parseBlocklist(blocklist),
+      parseEcdict(ecdictFixture),
+      parseCustomWords(customFixture),
+      parseBlocklist(blocklistFixture),
     );
 
     expect(merged.get('ability')?.definitionsZh).toEqual(['本领', '能力']);
@@ -86,5 +110,41 @@ describe('dictionary pipeline', () => {
   it('reports invalid blocklist rows', () => {
     expect(() => parseBlocklist('valid\nbad123\n'))
       .toThrow('BLOCKLIST_INVALID_WORD:bad123:row=2');
+  });
+
+  it('generates stable shards, index, manifest, and report', () => {
+    const artifacts = buildDictionaryArtifacts(mergedFixture, artifactOptions);
+    const repeated = buildDictionaryArtifacts(mergedFixture, artifactOptions);
+
+    expect(artifacts).toEqual(repeated);
+    expect(artifacts.index.entryCount).toBe(2);
+    expect(artifacts.manifest.ecdictCommit).toBe('0123456789abcdef');
+    expect(Object.keys(artifacts.shards)).toEqual(
+      'abcdefghijklmnopqrstuvwxyz'.split(''),
+    );
+  });
+
+  it('rejects entry-count changes beyond ten percent', () => {
+    const artifacts = buildDictionaryArtifacts(
+      mergedFixture,
+      artifactOptions,
+    );
+
+    expect(() => validateDictionaryArtifacts(artifacts, {
+      minimumEntries: 1,
+      previousEntryCount: 100,
+      maximumChangeRatio: 0.1,
+    })).toThrow('DICTIONARY_ENTRY_CHANGE_EXCEEDED');
+  });
+
+  it('reports added, removed, and changed words', () => {
+    expect(compareDictionaryIndexes(
+      new Map([['old', '{"lemma":"old"}'], ['same', '{"lemma":"same"}']]),
+      new Map([['new', '{"lemma":"new"}'], ['same', '{"lemma":"changed"}']]),
+    )).toEqual({
+      added: ['new'],
+      removed: ['old'],
+      changed: ['same'],
+    });
   });
 });

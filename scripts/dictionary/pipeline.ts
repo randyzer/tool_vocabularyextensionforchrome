@@ -26,6 +26,55 @@ export interface ParsedCustomWords {
   notes: Map<string, { source: string; note?: string }>;
 }
 
+export interface DictionarySourceMetadata {
+  source: 'ECDICT';
+  commit: string;
+  committedAt: string;
+  url: string;
+  sha256: string;
+}
+
+export interface DictionaryManifest {
+  version: 1;
+  source: 'ECDICT';
+  ecdictCommit: string;
+  ecdictCommittedAt: string;
+  ecdictUrl: string;
+  ecdictSha256: string;
+  upstreamEntryCount: number;
+  customEntryCount: number;
+  blocklistCount: number;
+  entryCount: number;
+}
+
+export interface DictionaryArtifacts {
+  shards: Record<
+    string,
+    Record<string, Omit<DictionaryBuildEntry, 'source'>>
+  >;
+  index: {
+    version: 1;
+    source: 'ECDICT';
+    entryCount: number;
+    shards: Record<string, string>;
+  };
+  manifest: DictionaryManifest;
+  report: {
+    overriddenWords: string[];
+    blockedWords: string[];
+    shardCounts: Record<string, number>;
+  };
+}
+
+export interface DictionaryArtifactOptions {
+  sourceMetadata: DictionarySourceMetadata;
+  upstreamEntryCount: number;
+  customEntryCount: number;
+  blocklistCount: number;
+  overriddenWords: string[];
+  blockedWords: string[];
+}
+
 export function normalizeDictionaryWord(value: string): string {
   return value
     .trim()
@@ -177,4 +226,188 @@ export function mergeDictionaryEntries(
   return new Map([...merged.entries()].sort(([left], [right]) => (
     left.localeCompare(right, 'en')
   )));
+}
+
+function compareWords(left: string, right: string): number {
+  return left.localeCompare(right, 'en');
+}
+
+function dictionaryLetters(): string[] {
+  return 'abcdefghijklmnopqrstuvwxyz'.split('');
+}
+
+export function buildDictionaryArtifacts(
+  entries: Map<string, DictionaryBuildEntry>,
+  options: DictionaryArtifactOptions,
+): DictionaryArtifacts {
+  const shards: DictionaryArtifacts['shards'] = {};
+  const shardFiles: Record<string, string> = {};
+  const shardCounts: Record<string, number> = {};
+
+  for (const letter of dictionaryLetters()) {
+    shards[letter] = {};
+    shardFiles[letter] = `${letter}.json`;
+    shardCounts[letter] = 0;
+  }
+
+  for (const [word, entry] of [...entries.entries()].sort(
+    ([left], [right]) => compareWords(left, right),
+  )) {
+    const shardKey = word.charAt(0);
+    const shard = shards[shardKey];
+    if (!shard) {
+      throw new Error(`DICTIONARY_INVALID_SHARD_KEY:${word}`);
+    }
+
+    const { source: _source, ...runtimeEntry } = entry;
+    shard[word] = runtimeEntry;
+    shardCounts[shardKey] = (shardCounts[shardKey] ?? 0) + 1;
+  }
+
+  const entryCount = entries.size;
+  return {
+    shards,
+    index: {
+      version: 1,
+      source: 'ECDICT',
+      entryCount,
+      shards: shardFiles,
+    },
+    manifest: {
+      version: 1,
+      source: options.sourceMetadata.source,
+      ecdictCommit: options.sourceMetadata.commit,
+      ecdictCommittedAt: options.sourceMetadata.committedAt,
+      ecdictUrl: options.sourceMetadata.url,
+      ecdictSha256: options.sourceMetadata.sha256,
+      upstreamEntryCount: options.upstreamEntryCount,
+      customEntryCount: options.customEntryCount,
+      blocklistCount: options.blocklistCount,
+      entryCount,
+    },
+    report: {
+      overriddenWords: [...options.overriddenWords].sort(compareWords),
+      blockedWords: [...options.blockedWords].sort(compareWords),
+      shardCounts,
+    },
+  };
+}
+
+export function compareDictionaryIndexes(
+  previous: Map<string, string>,
+  next: Map<string, string>,
+): { added: string[]; removed: string[]; changed: string[] } {
+  const added: string[] = [];
+  const removed: string[] = [];
+  const changed: string[] = [];
+
+  for (const [word, serializedEntry] of next) {
+    const previousEntry = previous.get(word);
+    if (previousEntry === undefined) {
+      added.push(word);
+    } else if (previousEntry !== serializedEntry) {
+      changed.push(word);
+    }
+  }
+
+  for (const word of previous.keys()) {
+    if (!next.has(word)) {
+      removed.push(word);
+    }
+  }
+
+  return {
+    added: added.sort(compareWords),
+    removed: removed.sort(compareWords),
+    changed: changed.sort(compareWords),
+  };
+}
+
+export function validateDictionaryArtifacts(
+  artifacts: DictionaryArtifacts,
+  options: {
+    minimumEntries: number;
+    previousEntryCount?: number;
+    maximumChangeRatio: number;
+  },
+): void {
+  const letters = dictionaryLetters();
+  const shardKeys = Object.keys(artifacts.shards);
+  const indexShardKeys = Object.keys(artifacts.index.shards);
+
+  if (
+    shardKeys.length !== letters.length
+    || !letters.every((letter, index) => shardKeys[index] === letter)
+  ) {
+    throw new Error('DICTIONARY_INVALID_SHARDS');
+  }
+  if (
+    indexShardKeys.length !== letters.length
+    || !letters.every(
+      (letter, index) => (
+        indexShardKeys[index] === letter
+        && artifacts.index.shards[letter] === `${letter}.json`
+      ),
+    )
+  ) {
+    throw new Error('DICTIONARY_INVALID_INDEX_SHARDS');
+  }
+
+  let countedEntries = 0;
+  for (const letter of letters) {
+    const shard = artifacts.shards[letter];
+    if (!shard) {
+      throw new Error(`DICTIONARY_MISSING_SHARD:${letter}`);
+    }
+
+    const words = Object.keys(shard);
+    if (!words.every((word, index) => (
+      word.charAt(0) === letter
+      && (index === 0 || compareWords(words[index - 1] ?? '', word) < 0)
+    ))) {
+      throw new Error(`DICTIONARY_UNSORTED_SHARD:${letter}`);
+    }
+
+    for (const [word, entry] of Object.entries(shard)) {
+      if (entry.lemma !== word) {
+        throw new Error(`DICTIONARY_LEMMA_MISMATCH:${word}`);
+      }
+      if (
+        !Array.isArray(entry.definitionsZh)
+        || entry.definitionsZh.length === 0
+        || entry.definitionsZh.some((definition) => !definition.trim())
+      ) {
+        throw new Error(`DICTIONARY_EMPTY_DEFINITION:${word}`);
+      }
+      countedEntries += 1;
+    }
+
+    if (artifacts.report.shardCounts[letter] !== words.length) {
+      throw new Error(`DICTIONARY_SHARD_COUNT_MISMATCH:${letter}`);
+    }
+  }
+
+  if (
+    artifacts.index.entryCount !== countedEntries
+    || artifacts.manifest.entryCount !== countedEntries
+  ) {
+    throw new Error(
+      `DICTIONARY_ENTRY_COUNT_MISMATCH:counted=${countedEntries}`,
+    );
+  }
+  if (countedEntries < options.minimumEntries) {
+    throw new Error(
+      `DICTIONARY_TOO_SMALL:minimum=${options.minimumEntries}:actual=${countedEntries}`,
+    );
+  }
+
+  const previous = options.previousEntryCount;
+  if (previous !== undefined && previous > 0) {
+    const ratio = Math.abs(countedEntries - previous) / previous;
+    if (ratio > options.maximumChangeRatio) {
+      throw new Error(
+        `DICTIONARY_ENTRY_CHANGE_EXCEEDED:previous=${previous}:next=${countedEntries}:ratio=${ratio}`,
+      );
+    }
+  }
 }
